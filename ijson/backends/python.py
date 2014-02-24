@@ -12,7 +12,7 @@ from ijson.compat import chr
 
 BUFSIZE = 16 * 1024
 NONWS = re.compile(r'\S')
-LEXTERM = re.compile(r'[^a-z0-9\.+-]')
+LEXTERM = re.compile(r'[^a-zA-Z0-9\.+-]')
 
 
 class UnexpectedSymbol(common.JSONError):
@@ -37,10 +37,15 @@ class Lexer(object):
             if match:
                 self.pos = match.start()
                 char = self.buffer[self.pos]
-                if 'a' <= char <= 'z' or '0' <= char <= '9' or char == '-':
+                # print("__next__: '{}'".format(char))
+                if 'a' <= char <= 'z' or 'A' <= char <= 'Z' or '0' <= char <= '9' or char == '-':
                     return self.lexem()
                 elif char == '"':
                     return self.stringlexem()
+                # elif char == ';':
+                #     print("HULLO")
+                #     self.pos += 1
+                #     return None
                 else:
                     self.pos += 1
                     return char
@@ -117,21 +122,30 @@ def unescape(s):
         start = pos + 1
 
 def parse_value(lexer, symbol=None):
+    # print "parse_value: {}".format(symbol)
     try:
         if symbol is None:
             symbol = next(lexer)
+        # print "parse_valuex: '{}'".format(symbol)
         if symbol == 'null':
             yield ('null', None)
+        elif symbol == ';':
+            yield ('end-statement-n', True)
         elif symbol == 'true':
             yield ('boolean', True)
         elif symbol == 'false':
             yield ('boolean', False)
-        elif symbol == '[':
+        elif symbol == '<':
+            for event in parse_binary(lexer):
+                yield event
+        elif symbol == '(':
             for event in parse_array(lexer):
                 yield event
         elif symbol == '{':
             for event in parse_object(lexer):
                 yield event
+        elif re.match('^[a-zA-Z0-9]+$', symbol):
+            yield ('string-n', ''.join(unescape(symbol)))
         elif symbol[0] == '"':
             yield ('string', ''.join(unescape(symbol[1:-1])))
         else:
@@ -143,15 +157,28 @@ def parse_value(lexer, symbol=None):
     except StopIteration:
         raise common.IncompleteJSONError()
 
+def parse_binary(lexer):
+    yield ('start_binary', None)
+    symbol = next(lexer)
+    if symbol != '>':
+        while True:
+            for event in parse_value(lexer, symbol):
+                print "found: {}".format(event)
+                yield event
+            symbol = next(lexer)
+            if symbol == '>':
+                break
+    yield ('end_binary', None)
+
 def parse_array(lexer):
     yield ('start_array', None)
     symbol = next(lexer)
-    if symbol != ']':
+    if symbol != ')':
         while True:
             for event in parse_value(lexer, symbol):
                 yield event
             symbol = next(lexer)
-            if symbol == ']':
+            if symbol == ')':
                 break
             if symbol != ',':
                 raise UnexpectedSymbol(symbol, lexer)
@@ -161,20 +188,26 @@ def parse_array(lexer):
 def parse_object(lexer):
     yield ('start_map', None)
     symbol = next(lexer)
+    # print("parse_object found symbol: '{}'".format(symbol))
     if symbol != '}':
         while True:
-            if symbol[0] != '"':
+            if symbol[0] == '"':
+                yield ('map_key', symbol[1:-1])
+            elif symbol == '}':
+                break
+            elif re.match('^[a-zA-Z0-9]+$', symbol):
+                yield ('map_key-n', symbol)
+            else:
                 raise UnexpectedSymbol(symbol, lexer)
-            yield ('map_key', symbol[1:-1])
             symbol = next(lexer)
-            if symbol != ':':
+            if symbol != '=':
                 raise UnexpectedSymbol(symbol, lexer)
             for event in parse_value(lexer):
                 yield event
             symbol = next(lexer)
             if symbol == '}':
                 break
-            if symbol != ',':
+            if symbol != ';':
                 raise UnexpectedSymbol(symbol, lexer)
             symbol = next(lexer)
     yield ('end_map', None)
