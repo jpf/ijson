@@ -76,6 +76,12 @@ def parse(basic_events):
         elif event == 'end_array':
             path.pop()
             prefix = '.'.join(path)
+        elif event == 'start_binary':
+            prefix = '.'.join(path)
+            path.append('item')
+        elif event == 'end_binary':
+            path.pop()
+            prefix = '.'.join(path)
         else: # any scalar value
             prefix = '.'.join(path)
 
@@ -120,7 +126,14 @@ class ObjectBuilder(object):
             array = []
             self.containers[-1](array)
             self.containers.append(array.append)
+        elif event == 'start_binary':
+            array = []
+            self.containers[-1](array)
+            self.containers.append(array.append)
         elif event == 'end_array' or event == 'end_map':
+            self.containers.pop()
+        elif event == 'end_binary':
+            print "HULLO: {}".format(self.containers[-1])
             self.containers.pop()
         else:
             self.containers[-1](value)
@@ -135,7 +148,7 @@ def items(prefixed_events, prefix):
         while True:
             current, event, value = next(prefixed_events)
             if current == prefix:
-                if event in ('start_map', 'start_array'):
+                if event in ('start_map', 'start_array', 'start_binary'):
                     builder = ObjectBuilder()
                     end_event = event.replace('start', 'end')
                     while (current, event) != (prefix, end_event):

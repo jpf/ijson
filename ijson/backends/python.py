@@ -145,7 +145,7 @@ def parse_value(lexer, symbol=None):
             for event in parse_object(lexer):
                 yield event
         elif re.match('^[a-zA-Z0-9]+$', symbol):
-            yield ('string-n', ''.join(unescape(symbol)))
+            yield ('string', ''.join(unescape(symbol)))
         elif symbol[0] == '"':
             yield ('string', ''.join(unescape(symbol[1:-1])))
         else:
@@ -163,7 +163,7 @@ def parse_binary(lexer):
     if symbol != '>':
         while True:
             for event in parse_value(lexer, symbol):
-                print "found: {}".format(event)
+                # print "found: {}".format(event)
                 yield event
             symbol = next(lexer)
             if symbol == '>':
@@ -196,7 +196,7 @@ def parse_object(lexer):
             elif symbol == '}':
                 break
             elif re.match('^[a-zA-Z0-9]+$', symbol):
-                yield ('map_key-n', symbol)
+                yield ('map_key', symbol)
             else:
                 raise UnexpectedSymbol(symbol, lexer)
             symbol = next(lexer)
